@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Credit Portfolio Early Warning Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{--bg:#0b1220;--card:#121b2f;--muted:#94a3b8;--text:#e5e7eb;--accent:#3b82f6;--accent2:#22c55e;--warn:#f59e0b;--danger:#ef4444;--border:#22314f}
+  *{box-sizing:border-box} body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:linear-gradient(180deg,#0b1220,#0e1628);color:var(--text)}
+  .wrap{max-width:1200px;margin:0 auto;padding:28px} h1{margin:0 0 6px;font-size:28px} .sub{color:var(--muted);margin:0 0 22px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:18px}
+  .kpi{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px}
+  .kpi .label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em} .kpi .val{font-size:24px;font-weight:700;margin-top:6px}
+  .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px} .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px}
+  .card h3{margin:0 0 10px;font-size:15px;color:#dbe7ff} .span6{grid-column:span 6} .span12{grid-column:span 12} .span4{grid-column:span 4} .span8{grid-column:span 8}
+  canvas{width:100%!important;height:300px!important} table{width:100%;border-collapse:collapse;font-size:13px} th,td{padding:8px;border-bottom:1px solid var(--border);text-align:right} th:first-child,td:first-child{text-align:left} th{color:#cfe0ff;font-weight:600}
+  .note{color:var(--muted);font-size:12px;margin-top:8px}
+  @media(max-width:900px){.span6,.span4,.span8{grid-column:span 12} canvas{height:260px!important}}
+</style></head><body>
+<div class="wrap">
+  <h1>Credit Portfolio Early Warning Dashboard</h1>
+  <p class="sub">DPD buckets, PAR trend, roll-rate (migration) and concentration — synthetic 3,000-loan portfolio, 12 monthly snapshots.</p>
+  <div class="kpis">
+    <div class="kpi"><div class="label">Outstanding (latest)</div><div class="val" id="kTot"></div></div>
+    <div class="kpi"><div class="label">PAR 30 (latest)</div><div class="val" id="kP30"></div></div>
+    <div class="kpi"><div class="label">PAR 90 (latest)</div><div class="val" id="kP90"></div></div>
+    <div class="kpi"><div class="label">90+ DPD Exposure</div><div class="val" id="k90"></div></div>
+  </div>
+  <div class="grid">
+    <div class="card span8"><h3>Monthly PAR30 / PAR90 Trend (%)</h3><canvas id="cTrend"></canvas></div>
+    <div class="card span4"><h3>DPD Bucket Exposure (latest month)</h3><canvas id="cDist"></canvas></div>
+    <div class="card span6"><h3>Exposure by Loan Grade (latest)</h3><canvas id="cGrade"></canvas></div>
+    <div class="card span6"><h3>Exposure by Product (latest)</h3><canvas id="cProd"></canvas></div>
+    <div class="card span12"><h3>Roll-rate / Migration Matrix (prev → latest month, accounts)</h3>
+      <div style="overflow:auto"><table id="mat"></table></div>
+      <div class="note">Rows = previous month bucket, Columns = current month bucket. Diagonal = stable; right of diagonal = deterioration (early warning).</div>
+    </div>
+  </div>
+</div>
+<script>
+const D = {"months":["2025-01-01","2025-02-01","2025-03-01","2025-04-01","2025-05-01","2025-06-01","2025-07-01","2025-08-01","2025-09-01","2025-10-01","2025-11-01","2025-12-01"],"trend":[{"m":"2025-01-01","tot":225834626,"par30":6.46,"par90":0},{"m":"2025-02-01","tot":421968957,"par30":7.4,"par90":0},{"m":"2025-03-01","tot":640002034,"par30":9.77,"par90":0},{"m":"2025-04-01","tot":818658417,"par30":11.79,"par90":0.12},{"m":"2025-05-01","tot":979606281,"par30":13.18,"par90":0.31},{"m":"2025-06-01","tot":1123795719,"par30":14.53,"par90":0.61},{"m":"2025-07-01","tot":1081285210,"par30":16.9,"par90":0.92},{"m":"2025-08-01","tot":1038112537,"par30":18.62,"par90":1.83},{"m":"2025-09-01","tot":994253125,"par30":20.44,"par90":3.44},{"m":"2025-10-01","tot":950832858,"par30":21.67,"par90":4.78},{"m":"2025-11-01","tot":907553804,"par30":23.33,"par90":6.1},{"m":"2025-12-01","tot":864459010,"par30":25.6,"par90":7.37}],"dist":[643119898,83445571,39285909,34916419,63691213],"buckets":["Current","1-30","31-60","61-90","90+"],"matrix":[[1839,203,0,0,0],[121,129,95,0,0],[0,29,61,86,0],[0,0,21,48,83],[0,0,0,23,262]],"byGrade":{"B":209778307,"A":307335195,"E":74291541,"C":160212560,"D":112841407},"byProd":{"Auto Loan":165658757,"Home Loan":176278894,"Business Loan":175666042,"Credit Card":171393465,"Personal Loan":175461852},"total":864459010};
+const fmtCr = v => '₹' + (v/1e7).toFixed(1) + ' Cr';
+const fmtL = v => (v/1e5).toFixed(1) + ' L';
+document.getElementById('kTot').textContent = fmtCr(D.total);
+const last = D.trend[D.trend.length-1];
+document.getElementById('kP30').textContent = last.par30 + '%';
+document.getElementById('kP90').textContent = last.par90 + '%';
+document.getElementById('k90').textContent = fmtCr(D.dist[4]);
+const labels = D.trend.map(x=>x.m.slice(0,7));
+Chart.defaults.color = '#cbd5e1'; Chart.defaults.borderColor = '#22314f';
+new Chart(document.getElementById('cTrend'), {type:'line', data:{labels, datasets:[
+  {label:'PAR 30 %', data:D.trend.map(x=>x.par30), borderColor:'#f59e0b', backgroundColor:'#f59e0b33', tension:.3},
+  {label:'PAR 90 %', data:D.trend.map(x=>x.par90), borderColor:'#ef4444', backgroundColor:'#ef444433', tension:.3}
+]}, options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true}}}});
+new Chart(document.getElementById('cDist'), {type:'doughnut', data:{labels:D.buckets, datasets:[{data:D.dist, backgroundColor:['#22c55e','#60a5fa','#f59e0b','#fb923c','#ef4444']} ]}, options:{responsive:true,maintainAspectRatio:false}});
+const gk=Object.keys(D.byGrade).sort(), gv=gk.map(k=>D.byGrade[k]);
+new Chart(document.getElementById('cGrade'), {type:'bar', data:{labels:gk, datasets:[{label:'Outstanding', data:gv, backgroundColor:['#22c55e','#60a5fa','#f59e0b','#fb923c','#ef4444']} ]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=> (v/1e7).toFixed(0)+'Cr'}}}}});
+const pk=Object.keys(D.byProd), pv=pk.map(k=>D.byProd[k]);
+new Chart(document.getElementById('cProd'), {type:'bar', data:{labels:pk, datasets:[{label:'Outstanding', data:pv, backgroundColor:'#3b82f6'}]}, options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{callback:v=> (v/1e7).toFixed(0)+'Cr'}}}}});
+// matrix table
+let html='<tr><th>Prev \ Curr</th>'+D.buckets.map(b=>'<th>'+b+'</th>').join('')+'</tr>';
+D.matrix.forEach((row,i)=>{ html+='<tr><th>'+D.buckets[i]+'</th>'+row.map((v,j)=>{const style = j>i? ' style="color:#fca5a5;font-weight:600"':' style="color:#e5e7eb"'; return '<td'+style+'>'+v+'</td>';}).join('')+'</tr>';});
+document.getElementById('mat').innerHTML = html;
+</script></body></html>
