@@ -15,6 +15,9 @@ Synthetic monthly loan-portfolio snapshots (`data/loan_portfolio.csv`, ~28.5k ro
 - **Roll-rate (migration) matrix** shows how accounts move between DPD buckets between consecutive months.
 - **Exposure concentration** by grade and product highlights where risk is clustered.
 
+## Live Dashboard
+- **View interactive dashboard:** https://hemantkjha-data.github.io/credit-portfolio-early-warning-dashboard/dashboard/
+
 ## Analysis & Dashboard
 - `sql/analysis.sql` — PAR metrics, DPD distribution, monthly trend, roll-rate migration, concentration queries.
 - `dashboard/index.html` — interactive dashboard (Chart.js): KPI cards, PAR30/PAR90 trend, DPD exposure distribution, roll-rate matrix, grade & product concentration.
